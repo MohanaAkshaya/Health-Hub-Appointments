@@ -61,7 +61,7 @@ const BookAppointmentDialog = ({ onSuccess }: BookAppointmentDialogProps) => {
   };
 
   const handleSubmit = async () => {
-    if (!selectedDoctor || !selectedDate || !selectedTime) {
+    if (!selectedDepartment || !selectedDoctor || !selectedDate || !selectedTime) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -70,35 +70,58 @@ const BookAppointmentDialog = ({ onSuccess }: BookAppointmentDialogProps) => {
       return;
     }
 
-    setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to book an appointment",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    const { error } = await supabase
-      .from("appointments")
-      .insert({
-        patient_id: user!.id,
+    setLoading(true);
+
+    try {
+      // Validate input
+      const { appointmentSchema } = await import('@/lib/validation');
+      const validatedData = appointmentSchema.parse({
+        patient_id: user.id,
         doctor_id: selectedDoctor,
         appointment_date: format(selectedDate, "yyyy-MM-dd"),
         appointment_time: selectedTime,
-        notes,
+        notes: notes || '',
       });
 
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
+      const { error } = await supabase.from("appointments").insert({
+        patient_id: validatedData.patient_id,
+        doctor_id: validatedData.doctor_id,
+        appointment_date: validatedData.appointment_date,
+        appointment_time: validatedData.appointment_time,
+        notes: validatedData.notes || null,
       });
-    } else {
+
+      if (error) throw error;
+
       toast({
         title: "Success",
         description: "Appointment booked successfully",
       });
+      
       setOpen(false);
       resetForm();
       onSuccess();
+    } catch (error: any) {
+      const { logError } = await import('@/lib/logger');
+      logError('Booking appointment', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || 'Failed to book appointment',
+      });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const resetForm = () => {

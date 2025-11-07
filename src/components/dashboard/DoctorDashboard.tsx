@@ -35,7 +35,12 @@ const DoctorDashboard = () => {
       .order("appointment_date", { ascending: true });
 
     if (error) {
-      console.error("Error fetching appointments:", error);
+      const { logError } = await import('@/lib/logger');
+      logError('Fetching appointments', error);
+      toast({
+        variant: "destructive",
+        title: "Error loading appointments",
+      });
     } else {
       setAppointments(data || []);
     }

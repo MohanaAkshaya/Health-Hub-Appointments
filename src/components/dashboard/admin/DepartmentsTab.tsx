@@ -23,11 +23,16 @@ const DepartmentsTab = () => {
       .select("*")
       .order("name");
 
-    if (error) {
-      console.error("Error fetching departments:", error);
-    } else {
-      setDepartments(data || []);
-    }
+      if (error) {
+        const { logError } = await import('@/lib/logger');
+        logError('Fetching departments', error);
+        toast({
+          variant: "destructive",
+          title: "Error loading departments",
+        });
+      } else {
+        setDepartments(data || []);
+      }
     setLoading(false);
   };
 
@@ -36,42 +41,50 @@ const DepartmentsTab = () => {
   }, []);
 
   const handleSubmit = async () => {
-    if (!formData.name) {
-      toast({
-        title: "Error",
-        description: "Department name is required",
-        variant: "destructive",
+    try {
+      // Validate input
+      const { departmentSchema } = await import('@/lib/validation');
+      const validatedData = departmentSchema.parse({
+        name: formData.name,
+        description: formData.description,
       });
-      return;
-    }
 
-    if (editId) {
-      const { error } = await supabase
-        .from("departments")
-        .update(formData)
-        .eq("id", editId);
+      if (editId) {
+        const { error } = await supabase
+          .from("departments")
+          .update({
+            name: validatedData.name,
+            description: validatedData.description || null,
+          })
+          .eq("id", editId);
 
-      if (error) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
-      } else {
+        if (error) throw error;
         toast({ title: "Success", description: "Department updated successfully" });
-      }
-    } else {
-      const { error } = await supabase
-        .from("departments")
-        .insert(formData);
-
-      if (error) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
       } else {
+        const { error } = await supabase
+          .from("departments")
+          .insert({
+            name: validatedData.name,
+            description: validatedData.description || null,
+          });
+
+        if (error) throw error;
         toast({ title: "Success", description: "Department created successfully" });
       }
-    }
 
-    setOpen(false);
-    setFormData({ name: "", description: "" });
-    setEditId(null);
-    fetchDepartments();
+      setOpen(false);
+      setFormData({ name: "", description: "" });
+      setEditId(null);
+      fetchDepartments();
+    } catch (error: any) {
+      const { logError } = await import('@/lib/logger');
+      logError('Saving department', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || 'Failed to save department',
+      });
+    }
   };
 
   const handleEdit = (dept: any) => {

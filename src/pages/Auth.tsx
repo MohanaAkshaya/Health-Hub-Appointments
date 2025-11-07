@@ -35,8 +35,21 @@ const Auth = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    try {
+      // Validate password strength
+      const { passwordSchema } = await import('@/lib/validation');
+      passwordSchema.parse(password);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Weak Password",
+        description: error.errors?.[0]?.message || "Password does not meet security requirements",
+      });
+      return;
+    }
+
     setLoading(true);
-    
     const { error } = await signUp(email, password, fullName);
     
     if (error) {
@@ -135,8 +148,11 @@ const Auth = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    minLength={6}
+                    minLength={12}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Must be 12+ characters with uppercase, lowercase, number & special character
+                  </p>
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Creating account..." : "Sign Up"}

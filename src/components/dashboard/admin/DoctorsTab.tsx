@@ -55,43 +55,38 @@ const DoctorsTab = () => {
       return;
     }
 
-    // Create auth user
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: formData.email,
-      password: formData.password,
-      email_confirm: true,
-      user_metadata: { full_name: formData.fullName },
-    });
-
-    if (authError) {
-      toast({ title: "Error", description: authError.message, variant: "destructive" });
-      return;
-    }
-
-    // Assign doctor role
-    const { error: roleError } = await supabase
-      .from("user_roles")
-      .insert({ user_id: authData.user.id, role: "doctor" });
-
-    if (roleError) {
-      toast({ title: "Error", description: roleError.message, variant: "destructive" });
-      return;
-    }
-
-    // Create doctor profile
-    const { error: doctorError } = await supabase
-      .from("doctors")
-      .insert({
-        user_id: authData.user.id,
-        department_id: formData.departmentId,
+    try {
+      // Validate input
+      const { doctorInfoSchema } = await import('@/lib/validation');
+      const validatedData = doctorInfoSchema.parse({
+        fullName: formData.fullName,
+        email: formData.email,
         specialization: formData.specialization,
         qualification: formData.qualification,
         experience_years: parseInt(formData.experienceYears),
       });
 
-    if (doctorError) {
-      toast({ title: "Error", description: doctorError.message, variant: "destructive" });
-    } else {
+      // Call secure edge function to create doctor
+      const { data, error } = await supabase.functions.invoke('create-doctor', {
+        body: {
+          email: validatedData.email,
+          password: formData.password,
+          fullName: validatedData.fullName,
+          departmentId: formData.departmentId,
+          specialization: validatedData.specialization,
+          qualification: validatedData.qualification,
+          experienceYears: validatedData.experience_years,
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to create doctor');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
       toast({ title: "Success", description: "Doctor added successfully" });
       setOpen(false);
       setFormData({
@@ -104,6 +99,14 @@ const DoctorsTab = () => {
         experienceYears: "0",
       });
       fetchData();
+    } catch (error: any) {
+      const { logError } = await import('@/lib/logger');
+      logError('Adding doctor', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || 'Failed to add doctor',
+      });
     }
   };
 
