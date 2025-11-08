@@ -31,15 +31,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (session?.user) {
           setTimeout(async () => {
             try {
-              const { data: roleData } = await supabase
+              const { data: rolesData } = await supabase
                 .from("user_roles")
                 .select("role")
-                .eq("user_id", session.user.id)
-                .single();
+                .eq("user_id", session.user.id);
               
-              setUserRole(roleData?.role ?? null);
+              // Prioritize roles: admin > doctor > patient
+              const roles = rolesData?.map(r => r.role) || [];
+              if (roles.includes('admin')) {
+                setUserRole('admin');
+              } else if (roles.includes('doctor')) {
+                setUserRole('doctor');
+              } else if (roles.includes('patient')) {
+                setUserRole('patient');
+              } else {
+                setUserRole(null);
+              }
             } catch (error) {
               console.error("Error fetching user role:", error);
+              setUserRole(null);
             }
           }, 0);
         } else {
@@ -57,9 +67,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           .from("user_roles")
           .select("role")
           .eq("user_id", session.user.id)
-          .single()
-          .then(({ data: roleData }) => {
-            setUserRole(roleData?.role ?? null);
+          .then(({ data: rolesData }) => {
+            // Prioritize roles: admin > doctor > patient
+            const roles = rolesData?.map(r => r.role) || [];
+            if (roles.includes('admin')) {
+              setUserRole('admin');
+            } else if (roles.includes('doctor')) {
+              setUserRole('doctor');
+            } else if (roles.includes('patient')) {
+              setUserRole('patient');
+            } else {
+              setUserRole(null);
+            }
             setLoading(false);
           });
       } else {
