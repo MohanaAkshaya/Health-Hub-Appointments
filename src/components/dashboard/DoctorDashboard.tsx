@@ -21,9 +21,14 @@ const DoctorDashboard = () => {
       .from("doctors")
       .select("id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
-    if (!doctorData) return;
+    if (!doctorData) {
+      // Doctor signed up but profile not created by admin yet
+      setAppointments([]);
+      setLoading(false);
+      return;
+    }
 
     const { data, error } = await supabase
       .from("appointments")
@@ -96,11 +101,13 @@ const DoctorDashboard = () => {
 
         {loading ? (
           <div className="text-center py-12">Loading appointments...</div>
-        ) : appointments.length === 0 ? (
+        ) : appointments.length === 0 && !loading ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No appointments found</p>
+              <p className="text-muted-foreground text-center">
+                {appointments.length === 0 ? "No appointments found. Your profile may still be under review by an administrator." : "No appointments found"}
+              </p>
             </CardContent>
           </Card>
         ) : (

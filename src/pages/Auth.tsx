@@ -12,6 +12,7 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [selectedRole, setSelectedRole] = useState<"patient" | "doctor">("patient");
   const [loading, setLoading] = useState(false);
   const { signIn, signUp } = useAuth();
   const { toast } = useToast();
@@ -50,7 +51,7 @@ const Auth = () => {
     }
 
     setLoading(true);
-    const { error } = await signUp(email, password, fullName);
+    const { error } = await signUp(email, password, fullName, selectedRole);
     
     if (error) {
       toast({
@@ -61,7 +62,7 @@ const Auth = () => {
     } else {
       toast({
         title: "Success",
-        description: "Account created successfully!",
+        description: `Account created successfully as ${selectedRole}!`,
       });
     }
     
@@ -153,6 +154,38 @@ const Auth = () => {
                   <p className="text-xs text-muted-foreground">
                     Must be 12+ characters with uppercase, lowercase, number & special character
                   </p>
+                </div>
+                <div className="space-y-3">
+                  <Label>I am registering as</Label>
+                  <div className="flex gap-6">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="role"
+                        value="patient"
+                        checked={selectedRole === "patient"}
+                        onChange={(e) => setSelectedRole(e.target.value as "patient" | "doctor")}
+                        className="w-4 h-4 text-primary accent-primary"
+                      />
+                      <span>Patient</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="role"
+                        value="doctor"
+                        checked={selectedRole === "doctor"}
+                        onChange={(e) => setSelectedRole(e.target.value as "patient" | "doctor")}
+                        className="w-4 h-4 text-primary accent-primary"
+                      />
+                      <span>Doctor</span>
+                    </label>
+                  </div>
+                  {selectedRole === "doctor" && (
+                    <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                      Note: Doctor accounts may require admin approval before full access.
+                    </p>
+                  )}
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Creating account..." : "Sign Up"}
