@@ -18,29 +18,77 @@ const PatientDashboard = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data, error } = await supabase
+    // Fetch appointments first without relying on PostgREST relationship hints
+    const { data: appts, error: apptsError } = await supabase
       .from("appointments")
-      .select(`
-        *,
-        doctor:doctors!appointments_doctor_id_fkey (
-          *,
-          user:profiles!doctors_user_id_fkey (full_name),
-          department:departments!doctors_department_id_fkey (name)
-        )
-      `)
+      .select("*")
       .eq("patient_id", user.id)
       .order("appointment_date", { ascending: true });
 
-    if (error) {
+    if (apptsError) {
       const { logError } = await import('@/lib/logger');
-      logError('Fetching appointments', error);
-      toast({
-        variant: "destructive",
-        title: "Error loading appointments",
-      });
-    } else {
-      setAppointments(data || []);
+      logError('Fetching appointments', apptsError);
+      setAppointments([]);
+      setLoading(false);
+      return;
     }
+
+    const appointments = appts || [];
+
+    // If no appointments, we're done
+    if (appointments.length === 0) {
+      setAppointments([]);
+      setLoading(false);
+      return;
+    }
+
+    // Fetch related doctors in bulk
+    const doctorIds = Array.from(new Set(appointments.map(a => a.doctor_id)));
+    const { data: doctors, error: doctorsError } = await supabase
+      .from("doctors")
+      .select("id, user_id, department_id, specialization, qualification, experience_years, consultation_fee")
+      .in("id", doctorIds);
+
+    if (doctorsError) {
+      const { logError } = await import('@/lib/logger');
+      logError('Fetching doctors for appointments', doctorsError);
+    }
+
+    const deptIds = Array.from(new Set((doctors || []).map(d => d.department_id)));
+    const userIds = Array.from(new Set((doctors || []).map(d => d.user_id)));
+
+    const [departmentsRes, profilesRes] = await Promise.all([
+      deptIds.length
+        ? supabase.from("departments").select("id, name").in("id", deptIds)
+        : Promise.resolve({ data: [], error: null } as any),
+      userIds.length
+        ? supabase.from("profiles").select("id, full_name").in("id", userIds)
+        : Promise.resolve({ data: [], error: null } as any),
+    ]);
+
+    if (departmentsRes.error || profilesRes.error) {
+      const { logError } = await import('@/lib/logger');
+      if (departmentsRes.error) logError('Fetching departments for appointments', departmentsRes.error);
+      if (profilesRes.error) logError('Fetching doctor profiles for appointments', profilesRes.error);
+    }
+
+    const departments = (departmentsRes.data as any[]) || [];
+    const profiles = (profilesRes.data as any[]) || [];
+
+    const deptMap = new Map(departments.map(d => [d.id, d]));
+    const profileMap = new Map(profiles.map(p => [p.id, p]));
+    const doctorMap = new Map((doctors || []).map(d => [d.id, {
+      ...d,
+      user: { full_name: profileMap.get(d.user_id)?.full_name || 'Unknown Doctor' },
+      department: { name: deptMap.get(d.department_id)?.name || 'Unknown Department' },
+    }]));
+
+    const enriched = appointments.map(a => ({
+      ...a,
+      doctor: doctorMap.get(a.doctor_id) || null,
+    }));
+
+    setAppointments(enriched);
     setLoading(false);
   };
 
@@ -110,11 +158,11 @@ const PatientDashboard = () => {
                   <div className="flex justify-between items-start">
                     <div className="space-y-1">
                       <CardTitle className="text-lg">
-                        Dr. {appointment.doctor.user.full_name}
+                        Dr. {appointment.doctor?.user?.full_name ?? 'Unknown Doctor'}
                       </CardTitle>
                       <CardDescription className="flex items-center gap-1">
                         <Users className="h-3 w-3" />
-                        {appointment.doctor.department.name}
+                        {appointment.doctor?.department?.name ?? 'Unknown Department'}
                       </CardDescription>
                     </div>
                     {getStatusBadge(appointment.status)}

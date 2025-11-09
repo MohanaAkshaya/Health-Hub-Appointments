@@ -26,10 +26,6 @@ const DepartmentsTab = () => {
       if (error) {
         const { logError } = await import('@/lib/logger');
         logError('Fetching departments', error);
-        toast({
-          variant: "destructive",
-          title: "Error loading departments",
-        });
       } else {
         setDepartments(data || []);
       }

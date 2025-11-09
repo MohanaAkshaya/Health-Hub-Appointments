@@ -32,23 +32,39 @@ const DoctorDashboard = () => {
 
     const { data, error } = await supabase
       .from("appointments")
-      .select(`
-        *,
-        patient:profiles!appointments_patient_id_fkey (full_name, email, phone)
-      `)
+      .select("*")
       .eq("doctor_id", doctorData.id)
       .order("appointment_date", { ascending: true });
 
     if (error) {
       const { logError } = await import('@/lib/logger');
       logError('Fetching appointments', error);
-      toast({
-        variant: "destructive",
-        title: "Error loading appointments",
-      });
-    } else {
-      setAppointments(data || []);
+      setAppointments([]);
+      setLoading(false);
+      return;
     }
+
+    const appts = data || [];
+
+    // Fetch related patient profiles in bulk (avoid relationship hints)
+    const patientIds = Array.from(new Set(appts.map(a => a.patient_id)));
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, phone")
+      .in("id", patientIds);
+
+    if (profilesError) {
+      const { logError } = await import('@/lib/logger');
+      logError('Fetching patient profiles', profilesError);
+    }
+
+    const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+    const enriched = appts.map(a => ({
+      ...a,
+      patient: profileMap.get(a.patient_id) || { full_name: 'Unknown', email: '', phone: '' },
+    }));
+
+    setAppointments(enriched);
     setLoading(false);
   };
 
